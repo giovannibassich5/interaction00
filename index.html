@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Handshake Inference</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2rem;
+    }
+    input, button, textarea {
+      display: block;
+      margin: 1rem 0;
+      width: 100%;
+      max-width: 400px;
+    }
+    textarea {
+      height: 150px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Handshake Detection</h1>
+
+  <label for="features">Inserisci le feature (accelerometro, giroscopio...):</label>
+  <input id="features" type="text" placeholder="es: 0.12, -0.45, 9.8, ..."/>
+
+  <button id="run-inference">Run Inference</button>
+
+  <h2>Risultati:</h2>
+  <pre id="results">Nessun risultato ancora.</pre>
+
+  <!-- Script Edge Impulse Standalone -->
+  <script src="edge-impulse-standalone.js"></script>
+  <script src="run-impulse.js"></script>
+
+  <!-- WebSocket + Inference Logic -->
+  <script>
+    let initialized = false;
+
+    // Connessione WebSocket al server locale
+    const socket = new WebSocket("ws://localhost:8080");
+
+    socket.onopen = () => {
+      console.log("WebSocket connesso");
+    };
+
+    socket.onerror = (error) => {
+      console.error("Errore WebSocket:", error);
+    };
+
+    socket.onmessage = (event) => {
+      console.log("Messaggio dal server:", event.data);
+    };
+
+    document.querySelector('#run-inference').onclick = async () => {
+      try {
+        if (!initialized) {
+          await EdgeImpulseStandalone.init();
+          initialized = true;
+        }
+
+        const features = document.querySelector('#features').value
+          .split(',')
+          .map(x => Number(x.trim()));
+
+        const result = await EdgeImpulseStandalone.runInference(features);
+
+        document.querySelector('#results').textContent = JSON.stringify(result, null, 4);
+
+        // Se è stato rilevato un handshake, lo invia al server
+        const prediction = result.results[0].label;
+        if (prediction === 'handshake') {
+          socket.send(JSON.stringify({ prediction: 'handshake', timestamp: Date.now() }));
+        }
+
+      } catch (ex) {
+        alert("Errore durante l'inferenza: " + (ex.message || ex.toString()));
+      }
+    };
+  </script>
+
+</body>
+</html>
